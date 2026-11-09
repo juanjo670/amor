@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galaxy Gallery</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: Georgia, serif; }
+  canvas { display: block; touch-action: none; }
+  html, body { touch-action: none; overscroll-behavior: none; }   /* permite arrastrar/pellizcar en el celular */
+
+  /* ===== PANTALLA DE INICIO ===== */
+  #intro {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 20% 80%, #5b1a6b 0%, transparent 45%),
+                radial-gradient(circle at 80% 10%, #2a2a8a 0%, transparent 50%), #07040f;
+    transition: opacity 1.2s; z-index: 10;
+  }
+  #intro.hide { opacity: 0; pointer-events: none; }
+  .card {
+    text-align: center; padding: 36px 48px; border-radius: 28px; color: #fff;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18);
+    backdrop-filter: blur(14px); box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .card h1 { margin: 0 0 14px; font: 700 clamp(30px, 6vw, 52px) 'Playfair Display', Georgia, serif; }
+  .card .emoji { font-size: 64px; }
+  .card p { letter-spacing: 3px; font-size: 12px; opacity: .85; margin: 14px 0 20px; }
+  .card button {
+    cursor: pointer; border: 0; color: #fff; padding: 10px 28px; border-radius: 999px;
+    letter-spacing: 2px; font-size: 12px; background: linear-gradient(135deg, #8e44ad, #c0398f);
+    box-shadow: 0 6px 20px rgba(192,57,143,.5);
+  }
+  /* ===== BOTÓN Y CARTA ===== */
+  #carta-btn {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 5; display: none;
+    cursor: pointer; border: 1px solid rgba(255,255,255,.35); color: #fff; padding: 12px 30px; border-radius: 999px;
+    font: 700 15px Georgia, serif; letter-spacing: 1px; background: rgba(192,57,143,.35);
+    backdrop-filter: blur(10px); box-shadow: 0 0 24px rgba(255,79,195,.55); transition: transform .2s, box-shadow .2s;
+  }
+  #carta-btn:hover { transform: translateX(-50%) scale(1.06); box-shadow: 0 0 36px rgba(255,79,195,.9); }
+  #carta-ov {
+    position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.7); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .5s;
+  }
+  #carta-ov.abierta { opacity: 1; pointer-events: auto; }
+  .papel {
+    position: relative; width: min(560px, 90vw); max-height: 82vh; overflow-y: auto; box-sizing: border-box;
+    padding: 40px 42px 34px; border-radius: 6px; background: var(--papel, #fff6ec); color: var(--texto, #5a3a4a);
+    box-shadow: 0 25px 70px rgba(0,0,0,.6); transform: translateY(40px) scale(.96); transition: transform .6s;
+    font-family: Georgia, serif; line-height: 1.75;
+  }
+  #carta-ov.abierta .papel { transform: none; }
+  .papel h2 { margin: 0 0 18px; text-align: center; font: 700 28px 'Playfair Display', Georgia, serif; }
+  .papel p { margin: 0 0 14px; font-size: 16px; white-space: pre-line; }
+  .papel .saludo { font-style: italic; font-size: 18px; }
+  .papel .despedida { margin-top: 22px; margin-bottom: 2px; }
+  .papel .firma { font: 700 22px 'Playfair Display', Georgia, serif; }
+  #carta-x {
+    position: absolute; top: 10px; right: 14px; border: 0; background: none; font-size: 24px; cursor: pointer; color: inherit; opacity: .6;
+  }
+  #carta-x:hover { opacity: 1; }
+  /* ===== FLECHAS TÁCTILES (girar y zoom) ===== */
+  .ctrl { position: fixed; bottom: 88px; z-index: 5; display: none; flex-direction: column; align-items: center; gap: 6px; }
+  .ctrl .fila { display: flex; gap: 10px; }
+  .ctrl small { color: rgba(255,255,255,.7); font: 700 10px Georgia, serif; letter-spacing: 2px; }
+  #ctrl-rot { left: 16px; } #ctrl-zoom { right: 16px; }
+  .ctrl button {
+    width: 54px; height: 54px; border-radius: 50%; cursor: pointer; font-size: 20px; color: #fff;
+    border: 1px solid rgba(255,255,255,.35); background: rgba(192,57,143,.35); backdrop-filter: blur(8px);
+    box-shadow: 0 0 16px rgba(255,79,195,.45); touch-action: none; user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+  }
+  .ctrl button:active { background: rgba(233,30,99,.7); transform: scale(.94); }
+  .papel { touch-action: pan-y; }                                  /* la carta sí se puede desplazar */
+  #pause {
+    position: fixed; top: 14px; right: 14px; width: 38px; height: 38px; border-radius: 50%;
+    border: 0; background: #e91e63; color: #fff; cursor: pointer; z-index: 5; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <div class="card">
+    <h1 id="titulo"></h1>
+    <div class="emoji" id="emoji"></div>
+    <p id="subtitulo"></p>
+    <button id="iniciar">INICIAR</button>
+  </div>
+</div>
+<button id="pause">⏸</button>
+<button id="carta-btn"></button>
+<div class="ctrl" id="ctrl-rot"><div class="fila">
+  <button data-e="g" data-v="-1" aria-label="Girar a la izquierda">◀</button>
+  <button data-e="g" data-v="1" aria-label="Girar a la derecha">▶</button>
+</div><small>GIRAR</small></div>
+<div class="ctrl" id="ctrl-zoom"><div class="fila">
+  <button data-e="z" data-v="-1" aria-label="Acercar">▲</button>
+  <button data-e="z" data-v="1" aria-label="Alejar">▼</button>
+</div><small>ZOOM</small></div>
+<div id="carta-ov"><div class="papel" id="papel"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =====================================================================
+   ★ CONFIGURACIÓN — aquí cambias todo a tu gusto ★
+   ===================================================================== */
+const CONFIG = {
+  // ============================================================
+  // 🎵 MÚSICA DE FONDO — suena cuando se hace clic en INICIAR
+  // Pon aquí la ruta de tu canción (archivo .mp3 junto al HTML,
+  // por ejemplo dentro de una carpeta "musica") o un enlace directo a un .mp3.
+  // Déjala vacía ("") si no quieres música.
+  // ============================================================
+  musica: "El Cuarteto de Nos - Enamorado Tuyo (Versión Karaoke Instrumental).mp3",                       // 👈 EJ: "musica/cancion.mp3"
+  volumenMusica: 0.33,               // de 0 (silencio) a 1 (máximo)
+  repetirMusica: true,              // true = se repite en bucle
+
+  // --- Textos de la pantalla de inicio ---
+  titulo:    "Galaxia de amor",
+  subtitulo: "PARA MI AMOR",
+  emoji:     "💘💘",            // puedes poner cualquier emoji
+
+  // --- Frases que giran alrededor de la galaxia ---
+  frases: ["GRACIAS POR APARECER EN MI VIDA", "TE QUIERO MUCHO", "GRACIAS POR ESTAR PARA MI", "TE AMO", "ERES LA LUZ DE MIS DIAS", "ERES MI SOL", "ERES MI VIDA", "ERES MI TODO", "ERES MI AMOR", "ERES MI ALEGRÍA", "ERES MI CORAZÓN"],
+  colorFrases: "#ccfcc5",           // color del texto
+  colorBrilloFrases: "#93c08c",     // color del brillo (glow)
+  escalaFrases: 1,                  // tamaño de la letra (1 = normal, 1.3 = más grande, 0.8 = más pequeña)
+  anchoMaximoFrase: 26,             // ancho máximo permitido; las frases más largas se reducen para caber
+
+  // --- Tus fotos (burbujas). Pon rutas de tus imágenes, ej: "fotos/foto1.jpg"
+  //     Si lo dejas vacío, se muestran burbujas con un corazón ---
+  fotos: [
+    // "fotos/foto1.jpg",
+    // "fotos/foto2.jpg",
+    // "fotos/foto3.jpg",
+  ],
+  cantidadBurbujasSiHayPocas: 0,    // mínimo de burbujas aunque tengas menos fotos
+
+  // --- Sol (esfera amarilla debajo del corazón) ---
+  solTamano: 2.0,                   // radio de la esfera
+  solAltura: 3.5,                   // altura (el corazón está en alturaCorazon)
+  solColor: 0xffffff,               // color de la esfera
+  solBrillo: 0x39ff14,              // color del resplandor alrededor
+
+  // --- Carta (botón de abajo) ---
+  carta: {
+    boton: "💌 Abrir carta",        // texto del botón
+    titulo: "Para ti",              // título de la carta ("" para quitarlo)
+    saludo: "Mi amor,",
+    parrafos: [                     // un texto entre comillas por párrafo
+      "Quiero decirte en este detallito lo mucho que te amo amor.",
+      "Esta galaxia representa mis pensamientos todos los días, los cuales están dando vueltas al sol que eres tú, eres la luz que ilumina mis días.",
+      "Gracias por existir y por iluminar cada día de mi vida de la mejor manera.",
+    ],
+    despedida: "Con todo mi cariño,",
+    firma: "Juanjo",
+    colorPapel: "#fff6ec",          // color del papel
+    colorTexto: "#5a3a4a",          // color de la letra
+  },
+
+  // --- Planetas (cada frase y cada foto viaja pegada a un planeta) ---
+  planetaTamano: 0.7,               // tamaño base de los planetas
+  planetaColores: ["#90ee90", "#ccfcc5", "#e3ffde", "#93c08c", "#def6da"],   // se reparten en orden
+  planetasConAnillo: true,          // true = algunos planetas llevan anillo (como Saturno)
+  mostrarOrbitas: true,             // true = línea tenue con el camino de cada planeta
+  colorOrbitas: "#ff9bdc",          // color de esas líneas
+  opacidadOrbitas: 0.18,            // 0 = invisibles, 1 = muy marcadas
+
+  // --- Burbujas de fotos ---
+  fondoBlancoBurbuja: false,        // true = círculo blanco detrás de las fotos
+  bordeBlancoFotos: true,           // borde blanco alrededor de tus fotos (los corazones nunca llevan)
+  tamanoBurbuja: 4,                 // tamaño de cada burbuja
+
+  // --- Explosión de inicio ---
+  explosionParticulas: 900,         // cantidad de puntos de colores
+  explosionVelocidad: 24,           // qué tan lejos y rápido salen
+  explosionDuracion: 4.5,           // segundos que dura
+  explosionColores: ["#00ffe1", "#ffe600", "#ff2bd6", "#7dff4a", "#ffffff"],
+  explosionRetrasoGalaxia: 1.8,     // segundos antes de que aparezca la galaxia
+
+  // --- Colores (formato hexadecimal) ---
+  colorCorazon:      0xff2bd6,      // corazón central
+  colorGalaxiaCentro: 0xffb347,     // centro de la galaxia (naranja)
+  colorGalaxiaBorde:  0xc2389b,     // bordes (rosa/morado)
+  colorAgujeroNegro:  0xffd21f,     // disco brillante del agujero negro
+
+  // --- Forma y tamaño de la galaxia ---
+  particulasGalaxia: 45000,         // más = más denso (pero más pesado)
+  brazos: 3,                        // número de brazos espirales
+  radioGalaxia: 32,                 // tamaño total
+  giroEspiral: 0.35,                // qué tan enrollados están los brazos
+  dispersion: 0.45,                 // qué tan "borrosos" son los brazos
+
+  // --- Corazón ---
+  particulasCorazon: 12000,
+  tamanoCorazon: 0.26,              // tamaño del corazón (antes 0.13)
+  alturaCorazon: 10,                // qué tan alto flota
+  latido: 0.06,                     // fuerza del latido (0 = sin latido)
+
+  // --- Velocidades ---
+  velocidadGalaxia: 0.03,           // rotación de la galaxia
+  velocidadOrbita: 0.05,            // velocidad de frases y fotos
+  rotacionAutomatica: 0.15,         // giro automático de la cámara (0 = quieta)
+
+  // --- Cámara ---
+  distanciaInicial: 38,
+  alturaCamara: 0.55,               // 0 = a ras del disco, 1.5 = vista desde arriba
+};
+
+/* =====================================================================
+   A partir de aquí es el motor. Puedes tocarlo si quieres experimentar.
+   ===================================================================== */
+document.getElementById('titulo').textContent = CONFIG.titulo;
+document.getElementById('subtitulo').textContent = CONFIG.subtitulo;
+document.getElementById('emoji').textContent = CONFIG.emoji;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 500);
+
+/* Textura redonda suave para las partículas */
+function puntoSuave() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const sprite = puntoSuave();
+function materialPuntos(size) {
+  return new THREE.PointsMaterial({ size, map: sprite, vertexColors: true, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+}
+
+/* ---------- GALAXIA ---------- */
+const galaxia = new THREE.Group(); scene.add(galaxia);
+(function () {
+  const N = CONFIG.particulasGalaxia, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  const cIn = new THREE.Color(CONFIG.colorGalaxiaCentro), cOut = new THREE.Color(CONFIG.colorGalaxiaBorde), c = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    const t = Math.pow(Math.random(), 1.6), r = 2.5 + t * CONFIG.radioGalaxia;
+    const ang = (i % CONFIG.brazos) / CONFIG.brazos * Math.PI * 2 + r * CONFIG.giroEspiral;
+    const d = CONFIG.dispersion * (0.3 + t * 2.2);
+    const rnd = () => (Math.random() - .5) * d * 2;
+    pos[i*3]   = Math.cos(ang) * r + rnd() * 2;
+    pos[i*3+1] = rnd() * 0.6;
+    pos[i*3+2] = Math.sin(ang) * r + rnd() * 2;
+    c.copy(cIn).lerp(cOut, Math.min(1, t * 1.4));
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  galaxia.add(new THREE.Points(g, materialPuntos(0.16)));
+})();
+
+/* ---------- AGUJERO NEGRO ---------- */
+(function () {
+  galaxia.add(new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+  const N = 5000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), c = new THREE.Color(CONFIG.colorAgujeroNegro);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = 1.7 + Math.random() * 2.2;
+    pos.set([Math.cos(a) * r, (Math.random() - .5) * 0.15, Math.sin(a) * r], i * 3);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  galaxia.add(new THREE.Points(g, materialPuntos(0.12)));
+})();
+
+/* ---------- CORAZÓN DE PARTÍCULAS ---------- */
+const corazon = new THREE.Group(); corazon.position.y = CONFIG.alturaCorazon; scene.add(corazon);
+(function () {
+  const N = CONFIG.particulasCorazon, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), c = new THREE.Color(CONFIG.colorCorazon);
+  const k = CONFIG.tamanoCorazon * 10;
+  for (let i = 0; i < N; i++) {
+    const t = Math.random() * Math.PI * 2, s = Math.sqrt(Math.random()) ; // s rellena el interior
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+    pos.set([x * s * k / 10, y * s * k / 10, (Math.random() - .5) * 4 * s], i * 3);
+    const b = 0.6 + Math.random() * 0.4; col.set([c.r * b, c.g * b, c.b * b], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  corazon.add(new THREE.Points(g, materialPuntos(0.2)));
+})();
+
+/* ---------- SOL (debajo del corazón) ---------- */
+const sol = new THREE.Group(); sol.position.y = CONFIG.solAltura; scene.add(sol);
+const brillosSol = [];
+(function () {
+  sol.add(new THREE.Mesh(new THREE.SphereGeometry(CONFIG.solTamano, 48, 48), new THREE.MeshBasicMaterial({ color: CONFIG.solColor })));
+  [[7, 0.55, CONFIG.solBrillo], [3.4, 0.9, CONFIG.solColor]].forEach(([mult, op, color]) => {
+    const m = new THREE.SpriteMaterial({ map: sprite, color, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+    const b = new THREE.Sprite(m); b.scale.set(CONFIG.solTamano * mult, CONFIG.solTamano * mult, 1);
+    b.userData.base = CONFIG.solTamano * mult; sol.add(b); brillosSol.push(b);
+  });
+})();
+
+/* ---------- FRASES Y FOTOS QUE ORBITAN ---------- */
+const orbitantes = [], lineasOrbita = [];
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));           // luz suave para ver los planetas
+scene.add(new THREE.PointLight(0xffe2a8, 1.6, 0).translateY(CONFIG.solAltura));   // la luz sale del sol
+let contadorPlanetas = 0;
+
+/* Crea un planeta que orbita y lleva su etiqueta (frase o foto) pegada encima.
+   La etiqueta y el planeta forman un grupo, así giran siempre juntos y alineados. */
+function orbitar(etiqueta, radio, altura) {
+  const n = contadorPlanetas++, g = new THREE.Group();
+  const r = CONFIG.planetaTamano * (0.75 + Math.random() * 0.6);
+  const color = new THREE.Color(CONFIG.planetaColores[n % CONFIG.planetaColores.length]);
+  const planeta = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 32), new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
+  g.add(planeta);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprite, color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  halo.scale.set(r * 4, r * 4, 1); g.add(halo);
+  if (CONFIG.planetasConAnillo && n % 3 === 1) {                 // 1 de cada 3 lleva anillo
+    const anillo = new THREE.Mesh(new THREE.RingGeometry(r * 1.5, r * 2.2, 48), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
+    anillo.rotation.x = Math.PI / 2.4; anillo.rotation.y = 0.3; g.add(anillo);
+  }
+  etiqueta.position.set(0, r + etiqueta.scale.y / 2 + 0.3, 0);   // justo encima del planeta
+  g.add(etiqueta);
+  g.userData = { radio, altura, ang: Math.random() * Math.PI * 2, vel: CONFIG.velocidadOrbita * (0.7 + Math.random() * 0.6) / Math.sqrt(radio / 10) };
+  scene.add(g); orbitantes.push(g);
+
+  if (CONFIG.mostrarOrbitas) {                                  // línea con el camino del planeta
+    const pts = []; for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * radio, altura, Math.sin(a) * radio)); }
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: CONFIG.colorOrbitas, transparent: true, opacity: CONFIG.opacidadOrbitas, depthWrite: false }));
+    scene.add(l); lineasOrbita.push(l);
+  }
+}
+
+CONFIG.frases.forEach((txt, i) => {
+  // 1) Medimos cuánto ocupa la frase para que el lienzo se ajuste a su largo (así no se corta)
+  const FUENTE = 'bold 84px Georgia', ALTO = 160, MARGEN = 120;   // MARGEN = espacio para el brillo
+  const medidor = document.createElement('canvas').getContext('2d');
+  medidor.font = FUENTE;
+  let ancho = Math.min(4096, Math.ceil(medidor.measureText(txt).width) + MARGEN);
+  const c = document.createElement('canvas'); c.width = ancho; c.height = ALTO;
+  const g = c.getContext('2d');
+  g.font = FUENTE; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = CONFIG.colorBrilloFrases; g.shadowBlur = 24; g.fillStyle = CONFIG.colorFrases;
+  g.fillText(txt, ancho / 2, ALTO / 2); g.fillText(txt, ancho / 2, ALTO / 2);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  // 2) Mismo tamaño de letra para todas; si una frase es larguísima se reduce hasta el máximo permitido
+  let w = ancho * 0.0125 * CONFIG.escalaFrases, h = 2 * CONFIG.escalaFrases;
+  if (w > CONFIG.anchoMaximoFrase) { h *= CONFIG.anchoMaximoFrase / w; w = CONFIG.anchoMaximoFrase; }
+  s.scale.set(w, h, 1);
+  orbitar(s, 14 + (i % 3) * 5 + i, -0.5 + Math.random());
+});
+
+const fotos = CONFIG.fotos.slice();
+while (fotos.length < CONFIG.cantidadBurbujasSiHayPocas) fotos.push(null);
+fotos.forEach((src, i) => {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), tex = new THREE.CanvasTexture(c);
+  function dibujar(img) {
+    g.clearRect(0, 0, 256, 256);                 // fondo transparente
+    if (img) {
+      g.save(); g.beginPath(); g.arc(128, 128, 118, 0, Math.PI * 2); g.clip();
+      if (CONFIG.fondoBlancoBurbuja) { g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 256); }
+      const m = Math.min(img.width, img.height);  // recorta la foto en cuadrado centrado
+      g.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 256, 256);
+      g.restore();
+      if (CONFIG.bordeBlancoFotos) { g.lineWidth = 8; g.strokeStyle = '#ffffff'; g.beginPath(); g.arc(128, 128, 120, 0, Math.PI * 2); g.stroke(); }
+    } else {                                      // corazón sin fondo (cambia el emoji si quieres)
+      g.font = '190px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('💖', 128, 140);
+    }
+    tex.needsUpdate = true;
+  }
+  dibujar(null);
+  if (src) { const im = new Image(); im.onload = () => dibujar(im); im.src = src; }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(CONFIG.tamanoBurbuja, CONFIG.tamanoBurbuja, 1);
+  orbitar(s, 12 + (i * 4.5) % 18, 0.5 + Math.random() * 2);
+});
+
+/* ---------- CÁMARA: arrastrar, zoom y giro automático ---------- */
+let theta = 0, phi = CONFIG.alturaCamara, dist = CONFIG.distanciaInicial * 2.2, distObjetivo = CONFIG.distanciaInicial;
+let arrastrando = false, px = 0, py = 0, pausa = false, empezado = false;
+const punteros = new Map(); let distPinza = 0;
+const limitarZoom = v => Math.max(8, Math.min(90, v));
+addEventListener('pointerdown', e => {
+  punteros.set(e.pointerId, e); arrastrando = true; px = e.clientX; py = e.clientY; distPinza = 0;
+});
+const soltar = e => {
+  punteros.delete(e.pointerId); distPinza = 0;
+  const resto = [...punteros.values()][0];
+  if (resto) { px = resto.clientX; py = resto.clientY; } else arrastrando = false;   // evita saltos al soltar un dedo
+};
+addEventListener('pointerup', soltar); addEventListener('pointercancel', soltar);
+addEventListener('pointermove', e => {
+  if (!punteros.has(e.pointerId)) return;
+  punteros.set(e.pointerId, e);
+  if (punteros.size === 2) {                                        // dos dedos = pellizcar para zoom
+    const [a, b] = [...punteros.values()], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (distPinza) distObjetivo = limitarZoom(distObjetivo - (d - distPinza) * 0.12);
+    distPinza = d; return;
+  }
+  if (!arrastrando) return;
+  theta -= (e.clientX - px) * 0.005; phi = Math.max(0.05, Math.min(1.5, phi + (e.clientY - py) * 0.004));
+  px = e.clientX; py = e.clientY;
+});
+addEventListener('wheel', e => { distObjetivo = Math.max(8, Math.min(90, distObjetivo + e.deltaY * 0.03)); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------- EXPLOSIÓN DE INICIO ---------- */
+let explosion = null, tExp = 0, apareció = false, aparicion = 1;
+const ocultables = () => [galaxia, corazon, sol, ...orbitantes, ...lineasOrbita];
+ocultables().forEach(o => o.visible = false);       // se muestran después de la explosión
+
+function lanzarExplosion() {
+  const N = CONFIG.explosionParticulas, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), vel = [];
+  const paleta = CONFIG.explosionColores.map(h => new THREE.Color(h));
+  for (let i = 0; i < N; i++) {
+    const dir = new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize();
+    vel.push(dir.multiplyScalar(CONFIG.explosionVelocidad * (0.25 + Math.random())));
+    const c = paleta[i % paleta.length]; col.set([c.r, c.g, c.b], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = materialPuntos(0.9);
+  explosion = { puntos: new THREE.Points(g, m), vel, mat: m };
+  scene.add(explosion.puntos); tExp = 0; apareció = false; aparicion = 0;
+}
+
+/* ---------- BOTONES ---------- */
+const audio = CONFIG.musica ? new Audio(CONFIG.musica) : null;
+if (audio) { audio.loop = CONFIG.repetirMusica; audio.volume = CONFIG.volumenMusica; }
+/* ---------- CARTA ---------- */
+const cartaBtn = document.getElementById('carta-btn'), cartaOv = document.getElementById('carta-ov'), papel = document.getElementById('papel');
+(function () {
+  const C = CONFIG.carta;
+  papel.style.setProperty('--papel', C.colorPapel); papel.style.setProperty('--texto', C.colorTexto);
+  const add = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = txt; papel.appendChild(e); return e; };
+  const x = add('button', '', '×'); x.id = 'carta-x';
+  if (C.titulo) add('h2', '', C.titulo);
+  if (C.saludo) add('p', 'saludo', C.saludo);
+  C.parrafos.forEach(t => add('p', '', t));
+  if (C.despedida) add('p', 'despedida', C.despedida);
+  if (C.firma) add('p', 'firma', C.firma);
+  cartaBtn.textContent = C.boton;
+  x.onclick = () => cartaOv.classList.remove('abierta');
+})();
+cartaBtn.onclick = () => cartaOv.classList.add('abierta');
+cartaOv.addEventListener('click', e => { if (e.target === cartaOv) cartaOv.classList.remove('abierta'); });
+addEventListener('keydown', e => { if (e.key === 'Escape') cartaOv.classList.remove('abierta'); });
+// Evita que arrastrar o usar la rueda sobre el botón/carta mueva la cámara
+[cartaBtn, cartaOv].forEach(el => ['pointerdown', 'wheel'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation())));
+
+/* ---------- FLECHAS TÁCTILES: mantén presionado para girar o hacer zoom ---------- */
+let giroBtn = 0, zoomBtn = 0;
+document.querySelectorAll('.ctrl button').forEach(b => {
+  const dir = +b.dataset.v, poner = on => { if (b.dataset.e === 'g') giroBtn = on ? dir : 0; else zoomBtn = on ? dir : 0; };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); poner(true); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => poner(false)));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+document.getElementById('iniciar').onclick = () => {
+  document.querySelectorAll('.ctrl').forEach(c => c.style.display = 'flex');
+  document.getElementById('intro').classList.add('hide');
+  document.getElementById('pause').style.display = 'block'; cartaBtn.style.display = 'block';
+  empezado = true; lanzarExplosion(); if (audio) audio.play().catch(() => {});
+};
+document.getElementById('pause').onclick = e => {
+  pausa = !pausa; e.target.textContent = pausa ? '▶' : '⏸';
+  if (audio) pausa ? audio.pause() : audio.play();
+};
+
+/* ---------- ANIMACIÓN ---------- */
+const reloj = new THREE.Clock();
+function animar() {
+  requestAnimationFrame(animar);
+  const dt = Math.min(reloj.getDelta(), 0.05), t = reloj.elapsedTime;
+  if (explosion) {
+    tExp += dt;
+    const p = explosion.puntos.geometry.attributes.position;
+    explosion.vel.forEach((v, i) => p.setXYZ(i, p.getX(i) + v.x * dt, p.getY(i) + v.y * dt, p.getZ(i) + v.z * dt));
+    p.needsUpdate = true;
+    explosion.mat.opacity = Math.max(0, 1 - tExp / CONFIG.explosionDuracion);
+    if (!apareció && tExp > CONFIG.explosionRetrasoGalaxia) { apareció = true; ocultables().forEach(o => o.visible = true); }
+    if (apareció) aparicion = Math.min(1, aparicion + dt / 2.5);        // la galaxia "crece" suavemente
+    if (tExp > CONFIG.explosionDuracion) { scene.remove(explosion.puntos); explosion = null; }
+  }
+  galaxia.scale.setScalar(0.4 + 0.6 * aparicion);
+  sol.scale.setScalar(0.3 + 0.7 * aparicion);
+  const tt = reloj.elapsedTime;
+  sol.position.y = CONFIG.solAltura + Math.sin(tt * 0.9) * 0.25;
+  brillosSol.forEach((b, i) => { const k = 1 + Math.sin(tt * 2 + i) * 0.06; b.scale.set(b.userData.base * k, b.userData.base * k, 1); });
+  if (!pausa) {
+    galaxia.rotation.y += CONFIG.velocidadGalaxia * dt * 3;
+    corazon.rotation.y += dt * 0.4;
+    const pulso = 1 + Math.sin(t * 3) * CONFIG.latido;
+    corazon.scale.setScalar(pulso * (0.3 + 0.7 * aparicion));
+    corazon.position.y = CONFIG.alturaCorazon + Math.sin(t) * 0.4;
+    orbitantes.forEach(o => {
+      const u = o.userData; u.ang += u.vel * dt;
+      o.position.set(Math.cos(u.ang) * u.radio, u.altura + Math.sin(t + u.radio) * 0.3, Math.sin(u.ang) * u.radio);
+    });
+    if (!arrastrando && empezado) theta += CONFIG.rotacionAutomatica * dt;
+  }
+  if (!empezado) theta += 0.02 * dt;
+  if (giroBtn) theta += giroBtn * 1.1 * dt;                                  // velocidad de giro de las flechas
+  if (zoomBtn) distObjetivo = limitarZoom(distObjetivo + zoomBtn * 22 * dt);  // velocidad de zoom de las flechas
+  dist += (distObjetivo - dist) * 0.03;            // entrada suave de la cámara
+  camera.position.set(Math.sin(theta) * Math.cos(phi) * dist, Math.sin(phi) * dist * 0.6 + 4, Math.cos(theta) * Math.cos(phi) * dist);
+  camera.lookAt(0, 3, 0);
+  renderer.render(scene, camera);
+}
+animar();
+</script>
+</body>
+</html>
